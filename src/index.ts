@@ -1,32 +1,48 @@
+//fancy apis
 import {Network, Alchemy} from "alchemy-sdk";
 
-const settings = {
-    apiKey: "",
-    network: Network.ETH_MAINNET,
-};
+//raw abi call
+import {ethers} from "ethers";
 
-const alchemy = new Alchemy(settings);
+// other imports
+import * as dotenv from 'dotenv';
+import fs from "fs";
+
+dotenv.config();
 
 // this is the contract we will use for testing purposes
 const nftContract = "0x845a007D9f283614f403A24E3eB3455f720559ca";
 
+const abi = JSON.parse(fs.readFileSync("./src/data/erc721.json", "utf-8"));
+
+const alchemySettings = {
+    apiKey: process.env.alchemyPrivKey,
+    network: Network.ETH_MAINNET,
+};
+const alchemy = new Alchemy(alchemySettings);
+
+const provider = new ethers.providers.JsonRpcProvider(process.env.infuraPrivKey);
+const contract = new ethers.Contract(nftContract, abi, provider)
+
 /** {getNftOwner} will return owner of ERC721 token */
 const getNftOwner = async (id: number): Promise<string | undefined> => {
-    let retry = 0;
-
-    while(true) {
+    /*
+        i dont care what you think about nested try/catch
+        currently only 2 nested try/catch: alchemy and raw abi call
+        cry about it
+    */
+    let owner: any;
+    try {
+        owner = await alchemy.nft.getOwnersForNft(nftContract, id);
+        return owner.owners[0];
+    } catch (err) {
         try {
-            const owner = await alchemy.nft.getOwnersForNft(nftContract, id);
-            return owner.owners[0];
+            console.log("retry")
+            owner = await contract.ownerOf(id);
+            return owner;
         } catch (err) {
-            console.log(`error occured, retrying ${retry}`);
-            retry++;
-
-            if (retry >= 3) {
-                console.log("retry limit, exiting")
-                retry = 0;
-                break;
-            }
+            console.log(err)
+            console.log("too much retry");
         }
     }
 }
